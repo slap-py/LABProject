@@ -1,13 +1,5 @@
 # include "GPS.h"
 
-std::array<float,3> getPosition(); //lat, lon, elevation...  get from GGA
-        std::array<float,2> getVelocity(); //velocity knots, track degrees... from RMC
-        std::array<float,3> getTime(); //hours minutes seconds/milliseconds...  from GGA
-        int getFixQuality(); //0 invalid, 1 gps fix, 2 dgps (3D)...  from GGA
-        int getFixCount(); //from GGA
-        std::array<float,3> getDOP(); //position dop, horizontal dop, vertical dop...  from GSA
-        int getSatelliteCount(); //from GSV
-
 
 
 void GPS::parseNMEALine(const String& line){
@@ -150,5 +142,5 @@ void GPS::update() {
 }
 
 bool GPS::hasFix() {
-    return fix && fixType > 0 && fixType >= 1 && fixCount > 0 && fixCount < 99;
+    return fix
 }
