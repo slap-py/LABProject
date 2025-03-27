@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include <array>
 
-
 class rylr998{
     public:
         //public variables and functions
@@ -11,13 +10,14 @@ class rylr998{
         
         struct ReceivedMessage{
             String content;
+            int length;
             int sender;
             int rssi;
             int snr;
         }
 
         void update();
-        void sendCommand(String message, String target); //240 bytes max message, target is int (id)
+        void sendMessage(String message, String target); //240 bytes max message, target is int (id)
         void reset(); //pull reset low
         void factoryReset(); //AT+FACTORY
         void setMode(String mode); //AT+MODE
@@ -71,3 +71,4 @@ class rylr998{
         //private variables and functions
         String _lastResponse;
 }
+#endif
