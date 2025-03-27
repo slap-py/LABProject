@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build and Upload Teensy 4.0",
+        "type": "shell",
+        "command": "platformio",
+        "args": ["run"],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Upload via Teensy CLI",
+        "type": "shell",
+        "command": "C:\\Users\\minec\\.platformio\\packages\\tool-teensy\\teensy_loader_cli.exe",
+        "args": [
+          "-mmcu=TEENSY40",
+          "-w",
+          "-v",
+          "-s",
+          "C:\\Users\\minec\\OneDrive\\Documents\\PlatformIO\\Projects\\Low Altitude Balloon Main\\.pio\\build\\teensy40\\firmware.hex"
+        ],
+        "dependsOn": ["Build and Upload Teensy 4.0"],
+        "problemMatcher": []
+      },
+      {
+        "label": "Serial Monitor",
+        "type": "shell",
+        "command": "platformio",
+        "args": [
+          "device",
+          "monitor",
+          "--port",
+          "COM5",
+          "--baud",
+          "9600"
+        ],
+        "dependsOn": ["Upload via Teensy CLI"],
+        "problemMatcher": []
+      }
+    ]
+  }
+  

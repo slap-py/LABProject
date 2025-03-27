@@ -103,7 +103,7 @@ std::array<float,2> GPS::getVelocity(){
     return {velocity,track};
 }
 
-std::array<float,3> GPS::getTime(){
+std::array<int,3> GPS::getTime(){
     return {hour,minute,second};
 }
 
@@ -142,5 +142,5 @@ void GPS::update() {
 }
 
 bool GPS::hasFix() {
-    return fix
+    return fix;
 }
