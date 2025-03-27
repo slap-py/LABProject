@@ -10,7 +10,7 @@ class GPS{
         bool hasFix();
         std::array<float,3> getPosition(); //lat, lon, elevation...  get from GGA
         std::array<float,2> getVelocity(); //velocity knots, track degrees... from RMC
-        std::array<float,3> getTime(); //hours minutes seconds/milliseconds...  from GGA
+        std::array<int,3> getTime(); //hours minutes seconds/milliseconds...  from GGA
         int getFixType(); //0 invalid, 1 gps fix, 2 dgps (3D)...  from GGA
         int getFixCount(); //from GGA
         std::array<float,3> getDOP(); //position dop, horizontal dop, vertical dop...  from GSA

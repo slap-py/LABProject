@@ -1,10 +1,10 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include "gps.h"
+#include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
-#include "rylr.h"
 
 SoftwareSerial gpsSerial(0, 1);
 GPS gps;
@@ -19,21 +19,19 @@ const unsigned long statusInterval = 2000;  // Status every 2 seconds
 #define PRIMARY_RX_PIN 7
 #define PRIMARY_TX_PIN 8
 
-#define SECONDARY_RX_PIN 17
-#define SECONDARY_TX_PIN 18
+#define SECONDARY_RX_PIN 16
+#define SECONDARY_TX_PIN 17
 
-#define BUZZER_PIN 99
+#define BUZZER_PIN 2
 
 bool configFlag = false;
 
 int buzzDuration = 0.0f;
 unsigned long buzzStart=0;
 
-SoftwareSerial primaryAntennaSerial(PRIMARY_RX_PIN,PRIMARY_TX_PIN);
-SoftwareSerial secondaryAntennaSerial(SECONDARY_RX_PIN,SECONDARY_TX_PIN);
+SoftwareSerial primaryAntenna(PRIMARY_RX_PIN,PRIMARY_TX_PIN);
+SoftwareSerial secondaryAntenna(SECONDARY_RX_PIN,SECONDARY_TX_PIN);
 
-rylr998 primaryAntenna(primaryAntennaSerial);
-//TO CREATE: secondary antenna
 
 String get_value(String data, char separator, int index) {
   int found = 0;
@@ -77,7 +75,7 @@ void _buzzHold(int frequency, int duration){
 }
 
 void log(String message){
-  String output = String(millis())+": "+message
+  String output = String(millis())+": "+message;
   Serial.println(message);
   //ADD SD CARD LOG FILE INTEGRATION
 }
@@ -85,7 +83,7 @@ void log(String message){
 void setup() {
   Serial.begin(9600);
   gpsSerial.begin(9600);
-  gps.begin(gpsSerial)
+  gps.begin(gpsSerial);
 
   primaryAntenna.begin(115200);
   secondaryAntenna.begin(115200);
@@ -98,11 +96,9 @@ void setup() {
   _buzzHold(2000,500);
 
   log("Initializing primary antenna.");
-  primaryAntenna.sendCommand()
 }
 
 void loop() {
   gps.update();
   buzzUpdate();
-  primaryAntenna.update();
 }
