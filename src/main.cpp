@@ -80,6 +80,18 @@ void log(String message){
   //ADD SD CARD LOG FILE INTEGRATION
 }
 
+// equipment on the board:
+// Teensy 4.0
+// BME680
+// NEO-7M GPS breakout
+// MPU6050
+// RYLR890
+// RYLR 998
+// SD Card logger
+// buzzer
+
+
+
 void setup() {
   Serial.begin(115200);
   gpsSerial.begin(9600);
@@ -88,6 +100,7 @@ void setup() {
   secondaryAntenna.begin(115200);
 
   unsigned long timeout = millis();
+  tempmon_init();
   while (!Serial && (millis() - timeout < 5000));
 
   
@@ -100,26 +113,18 @@ void setup() {
 }
 unsigned long lastTrigger = 0;
 const unsigned long interval = 10000;
+
+
+
 void loop() {
-  
   
   buzzUpdate();
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
     
-  }  
-  if(millis() - lastTrigger >= interval){
-    log("Update.");
-    Serial.printf("Sats: %d, Speed: %.2f km/h\n",
-      gps.satellites.value(),
-      gps.speed.kmph());
-    lastTrigger = millis();
-  }
-  if(gps.location.isValid()){
-    Serial.printf("Lat: %.6f, Lon: %.6f, Alt: %.2f\n",
-      gps.location.lat(),
-      gps.location.lng(),
-      gps.altitude.meters());
-  }
+  } 
+  
+
+  
   
 }
