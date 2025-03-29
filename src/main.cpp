@@ -1,13 +1,14 @@
 #include <Arduino.h>
-#include <SoftwareSerial.h>
-#include "gps.h"
+#include <TinyGPS++.h>
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
 
-SoftwareSerial gpsSerial(0, 1);
-GPS gps;
+#define gpsSerial Serial1  // Pins 0 (RX) and 1 (TX)
+
+#define primaryAntenna Serial2
+#define secondaryAntenna Serial3
 
 
 bool hasFix = false;
@@ -26,11 +27,10 @@ const unsigned long statusInterval = 2000;  // Status every 2 seconds
 
 bool configFlag = false;
 
-int buzzDuration = 0.0f;
+int buzzDuration = 0;
 unsigned long buzzStart=0;
 
-SoftwareSerial primaryAntenna(PRIMARY_RX_PIN,PRIMARY_TX_PIN);
-SoftwareSerial secondaryAntenna(SECONDARY_RX_PIN,SECONDARY_TX_PIN);
+TinyGPSPlus gps;
 
 
 String get_value(String data, char separator, int index) {
@@ -76,19 +76,20 @@ void _buzzHold(int frequency, int duration){
 
 void log(String message){
   String output = String(millis())+": "+message;
-  Serial.println(message);
+  Serial.println(output);
   //ADD SD CARD LOG FILE INTEGRATION
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   gpsSerial.begin(9600);
-  gps.begin(gpsSerial);
 
   primaryAntenna.begin(115200);
   secondaryAntenna.begin(115200);
 
-  while(!Serial && millis() < 10000); //Wait up to 10 seconds for serial to connect/monitor to be opened
+  unsigned long timeout = millis();
+  while (!Serial && (millis() - timeout < 5000));
+
   
   Wire.begin();
   pinMode(BUZZER_PIN,OUTPUT);
@@ -97,8 +98,28 @@ void setup() {
 
   log("Initializing primary antenna.");
 }
-
+unsigned long lastTrigger = 0;
+const unsigned long interval = 10000;
 void loop() {
-  gps.update();
+  
+  
   buzzUpdate();
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+    
+  }  
+  if(millis() - lastTrigger >= interval){
+    log("Update.");
+    Serial.printf("Sats: %d, Speed: %.2f km/h\n",
+      gps.satellites.value(),
+      gps.speed.kmph());
+    lastTrigger = millis();
+  }
+  if(gps.location.isValid()){
+    Serial.printf("Lat: %.6f, Lon: %.6f, Alt: %.2f\n",
+      gps.location.lat(),
+      gps.location.lng(),
+      gps.altitude.meters());
+  }
+  
 }
