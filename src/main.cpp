@@ -30,7 +30,13 @@ bool configFlag = false;
 int buzzDuration = 0;
 unsigned long buzzStart=0;
 
+int startupTxIndex = 0;
+char startupLog[16];
+
 TinyGPSPlus gps;
+
+Adafruit_BME680 bme;
+Adafruit_MPU6050 mpu;
 
 
 String get_value(String data, char separator, int index) {
@@ -80,36 +86,245 @@ void log(String message){
   //ADD SD CARD LOG FILE INTEGRATION
 }
 
-// equipment on the board:
-// Teensy 4.0
-// BME680
-// NEO-7M GPS breakout
-// MPU6050
-// RYLR890
-// RYLR 998
-// SD Card logger
-// buzzer
+String sendAT(HardwareSerial& port, const char* cmd) {
+  port.print(cmd);
+  port.print("\r\n");
+
+  String response = "";
+  unsigned long start = millis();
+  while (millis() - start < 200) {
+    while (port.available()) {
+      response += (char)port.read();
+    }
+  }
+
+  return response;
+}
+
+void configureAntenna(HardwareSerial& port, const char* label, const char* command) {
+  String response = sendAT(port, command).trim();
+  if (response == "+OK") {
+    log(String(label) + " acknowledged.");
+    if (startupTxIndex < 16) {
+      startupLog[startupTxIndex++] = 1;
+    }
+  } else {
+    log(String(label) + " failed.");
+    log(response);
+    if (startupTxIndex < 16) {
+      startupLog[startupTxIndex++] = 0;
+    }
+  }
+}
 
 
+
+/*
+Startup procedures by Board equipment:
+LOG ALL TO SD
+
+Teensy 4.0:
+/ Enable temperature monitor
+/ Check temperature between 0c and 60c
+
+NEO-7M GPS breakout
+/ Connect via module.
+/ Stay in setup holding loop until fix is achieved.
+
+/ RYLR890
+/ RYLR998
+
+BME680
+/ Enable i2c connection via bme68x adafruit module.
+/ Check reading
+-- 5 minute burn in phase for the gas sensor**
+
+
+MPU6050
+/ Enable i2c connection via MPU6050 adafruit module.
+- Check reading.
+
+SD Card logger
+- Ensure connection via module.
+- Write all startup data, check if written.
+
+buzzer
+- Simple test.
+*/
+
+//Teensy related definitions
+constexpr int serial_connect_wait = 5000; // Maximum time to wait for serial to connect.
+constexpr float minimum_chip_temperature = 0;
+constexpr float maximum_chip_temperature = 60;
+//GPS Related definitions
+constexpr unsigned long gps_fix_wait = 600000; // Maximum time waiting for fix
+constexpr unsigned long gps_fix_hold = 30000; // Time waiting for the fix to hold.
+
+//Antenna related definitions
+constexpr unsigned long antenna_band = 915500000;
+constexpr char* initializationAwakeMessage = "AT+SEND=2,61,\"ARGON Embedded v1 | SCIENTIFIC LOW-ALTITUDE BALLOON SOFTWARE.\"\r\n";
+
+bool GPSFixSuccess = false;
 
 void setup() {
   Serial.begin(115200);
   gpsSerial.begin(9600);
-
-  primaryAntenna.begin(115200);
-  secondaryAntenna.begin(115200);
-
-  unsigned long timeout = millis();
+  _buzzHold(2000,500);
+  
+  unsigned long serial_connect_timeout = millis();
   tempmon_init();
-  while (!Serial && (millis() - timeout < 5000));
 
+  //Check Teensy temperature & initialize serial connection.
+  while (!Serial && (millis() - serial_connect_timeout < serial_connect_wait));
+  float temperature_start = tempmonGetTemp();
+  if (temperature_start < maximum_chip_temperature || temperature_start > minimum_chip_temperature){
+    log("Teensy 4.0 temperature in range.");
+    startupLog[startupTxIndex] = 1;
+  }else{
+    log("Teensy 4.0 temperature NOT in range. Allow cooling.");
+    startupLog[startupTxIndex] = 0;
+  }
+  startupTxIndex++;
+
+  unsigned long beginGPS = millis();
+  unsigned long fixStart = 0;
+
+  //GPS Initialization
+  log("Beginning GPS initialization.");
+  while ((millis() - beginGPS) < gps_fix_wait){
+    while (gpsSerial.available()) {
+      gps.encode(gpsSerial.read());
+    }
+    if(gps.location.isValid()){
+      if(fixStart == 0){
+        fixStart = millis();
+        log("Achieved GPS fix. Starting countdown.");
+      }else if (millis() - fixStart >= gps_fix_hold){
+        String gpsPrintString = "GPS fix held | "+String(gps.location.lat())+","+String(gps.location.lng())+" | "+ String(gps.altitude.meters())+"m | Satellites: "+String(gps.satellites.value())+".";
+        log(gpsPrintString);
+        GPSFixSuccess = true;
+        break;
+      }
+    }else{
+      if(fixStart !=0){
+        log("Fix lost. Restarting.");
+        fixStart = 0;
+      }
+    }
+  }
+  if(GPSFixSuccess == false){
+    startupLog[startupTxIndex] = 0;
+  }else{
+    startupLog[startupTxIndex] = 1;
+  }
+  startupTxIndex++;
+
+  //Primary antenna (RYLR998) initialization.
+  primaryAntenna.begin(115200);
+  
+  
+  //Secondary antenna (RYLR896) initialization.
+  secondaryAntenna.begin(115200);
   
   Wire.begin();
   pinMode(BUZZER_PIN,OUTPUT);
-  
-  _buzzHold(2000,500);
+  log("Out of GPS loop.");
+  String primaryATResponse = sendAT(primaryAntenna,"AT").trim();
+  if (primaryATResponse=="+OK"){
+    log("Primary antenna responsive.");
+    startupLog[startupTxIndex] = 1;
+  }else{
+    log("Primary antenna not responsive.");
+    startupLog[startupTxIndex] = 0;
+    log(primaryATResponse);
+  }
+  startupTxIndex++;
 
-  log("Initializing primary antenna.");
+  String secondaryATResponse = sendAT(secondaryAntenna,"AT").trim();
+  if (secondaryATResponse=="+OK"){
+    log("Secondary antenna responsive.\n");
+    startupLog[startupTxIndex] = 1;
+  }else{
+    log("Secondary antenna not responsive.\n");
+    startupLog[startupTxIndex] = 0;
+    log(secondaryATResponse);
+  }
+  startupTxIndex++;
+
+  // Primary
+  configureAntenna(primaryAntenna, "Primary antenna network id", "AT+NETWORKID=6");
+  configureAntenna(primaryAntenna, "Primary antenna parameter", "AT+PARAMETER=9,7,4,7");
+  configureAntenna(primaryAntenna, "Primary antenna band", "AT+BAND=915500000");
+  configureAntenna(primaryAntenna, "Primary antenna address", "AT+ADDRESS=1");
+  configureAntenna(primaryAntenna, "Primary antenna transmit strength", "AT+CRFOP=22");
+
+  Serial.println("");
+  // Secondary
+  configureAntenna(secondaryAntenna, "Secondary antenna network id", "AT+NETWORKID=6");
+  configureAntenna(secondaryAntenna, "Secondary antenna parameter", "AT+PARAMETER=9,7,4,7");
+  configureAntenna(secondaryAntenna, "Secondary antenna band", "AT+BAND=915500000");
+  configureAntenna(secondaryAntenna, "Secondary antenna address", "AT+ADDRESS=3");
+  configureAntenna(secondaryAntenna, "Secondary antenna transmit strength", "AT+CRFOP=15");
+
+  log("Antenna configuration complete.");
+  Serial.println();
+  if(!bme.begin()){
+    log("BME680 not connected.");
+    startupLog[startupTxIndex] = 0;
+  }else{
+    startupLog[startupTxIndex] = 1;
+  }
+  startupTxIndex++;
+  bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setHumidityOversampling(BME680_OS_4X);
+  bme.setPressureOversampling(BME680_OS_8X);
+  bme.setIIRFilterSize(BME680_FILTER_SIZE_63);
+  bme.setGasHeater(0, 0); //GAS DISABLED INITIALLY.
+
+  bme.performReading();
+  String printData = "BME680 enabled | "+String(bme.temperature) + " C | " + String(bme.pressure) + " Pa | " + String(bme.humidity) + "%.";
+  log(printData);
+  
+
+  if(!mpu.begin()){
+    log("MPU6050 not connected.");
+    startupLog[startupTxIndex] = 0;
+  }else{
+    log("MPU6050 enabled.");
+    startupLog[startupTxIndex] = 1;
+  }
+  startupTxIndex++;
+  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+  String summary = "Startup Log: ";
+  for (int i = 0; i < startupTxIndex; i++) {
+    summary += String((int)startupLog[i]);
+
+  }
+  log(summary);
+  sendAT(primaryAntenna,initializationAwakeMessage);
+  log("Sending Initialization message.");
+  unsigned long start = millis();
+  String buffer = "";
+  while(true){
+    if(millis() - start >= 10000){
+      break;
+    }
+    while(primaryAntenna.available()){
+      char c = primaryAntenna.read();
+      buffer+=c;
+    }
+    if(buffer!=""){
+      //Message in!
+      if(buffer.indexOf("ARGON")!= -1){
+        log("Acknowledgement received.");
+      }
+    }
+  }
+
+
 }
 unsigned long lastTrigger = 0;
 const unsigned long interval = 10000;
@@ -121,7 +336,6 @@ void loop() {
   buzzUpdate();
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
-    
   } 
   
 
