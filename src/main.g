@@ -364,11 +364,132 @@ void setup() {
 unsigned long lastTrigger = 0;
 const unsigned long interval = 10000;
 
+int timesPerMinute(float updatesPerMinute){
+  return (unsigned long)(60000/updatesPerMinute);
+};
 
+int timesPerSecond(float updatesPerSecond){
+  return (unsigned long)(1000/updatesPerSecond);
+};
+
+
+struct ReadIntervals {
+  unsigned long BME;
+  unsigned long MPU;
+  unsigned long GPS;
+  unsigned long SD;
+  unsigned long TX;
+
+  bool operator==(const ReadIntervals& other) const {
+    return BME == other.BME && MPU == other.MPU && GPS == other.GPS && SD == other.SD && TX == other.TX;
+  }
+};
+
+enum LogState{
+  NORMALRATE,
+  LOWPOWER,
+  LANDED,
+  HIGHRATE
+};
+
+enum FlightState{ //Advance criteria to RECOVERY state: More than 90 minutes in any given state.
+  LAUNCHPAD, //Advance criteria: armed by software ... INTERVALS_LOWPOWER
+  LAUNCHPAD_ARMED, //Advance criteria: upward movement detected ... INTERVALS_NORMAL
+  ASCENT, //Advance criteria to HIGHABOVE state: elevation>15000ft ... Advance criteria to DESCENT state: more than 200ft below MAX ALTITUDE RECORDED ... INTERVALS_NORMAL
+  HIGHABOVE, //Advance criteria: More than 200ft below MAX ALTITUDE RECORDED ... INTERVALS_HIGH
+  DESCENT, //Advance criteria: Within 2000ft of EXPECTED LANDING ELEVATION ... INTERVALS_NORMAL
+  NEARGROUND, //Advance criteria: 10 seconds without movement ... INTERVALS_HIGH
+  RECOVERY //Advance criteria: NONE ... INTERVALS_LANDED
+};
+
+//Normal sensor reading intervals.
+ReadIntervals INTERVALS_NORMAL = {
+  timesPerMinute(2),
+  timesPerSecond(20),
+  timesPerMinute(6),
+  timesPerMinute(1),
+  timesPerMinute(1)
+};
+
+//Low power mode reading intervals.
+ReadIntervals INTERVALS_LOWPOWER = {
+  timesPerMinute(1),
+  timesPerSecond(2),
+  timesPerMinute(2),
+  timesPerMinute(0.5),
+  timesPerMinute(2)
+};
+
+//Landed reading intervals.
+ReadIntervals INTERVALS_LANDED = {
+  timesPerMinute(1),
+  timesPerSecond(1),
+  timesPerMinute(10),
+  timesPerMinute(0.5),
+  timesPerMinute(6)
+};
+
+ReadIntervals INTERVALS_HIGH = {
+  timesPerMinute(4),
+  timesPerSecond(50),
+  timesPerMinute(10),
+  timesPerMinute(2),
+  timesPerMinute(6)
+};
+
+FlightState currentState = LAUNCHPAD;
+unsigned long stateEnterTime = millis();
+ReadIntervals currentIntervals = INTERVALS_LOWPOWER;
+
+//logSensors caching
+unsigned long lastBMERead = 0;
+unsigned long lastMPURead = 0;
+unsigned long lastGPSRead = 0;
+unsigned long lastSD = 0;
+unsigned long lastTransmit = 0;
+ReadIntervals lastActiveIntervals = currentIntervals;
+
+void handleFlightState(){
+  switch (currentState){
+    case LAUNCHPAD:
+      
+  }
+}
+
+void logSensors(ReadIntervals _currentIntervals,unsigned long _now){
+  if (_currentIntervals == lastActiveIntervals){ //Data interval the same, no need to do wonky calculations
+    if (_now - lastBMERead >= _currentIntervals.BME){ // Log BME data.
+
+    }
+    if (_now - lastMPURead >= _currentIntervals.MPU){ //Log MPU data.
+
+    }
+    if (_now - lastGPSRead >= _currentIntervals.GPS){ //Log GPS data.
+
+    }
+    if (_now - lastSD >= _currentIntervals.SD){ //Move data to SD card.
+
+    }
+    if (_now - lastTransmit >= _currentIntervals.TX){ //TX a packet
+
+    }
+  }else{
+    //Data interval different, see if any updating is needed.
+  }
+}
 
 void loop() {
+  unsigned long now = millis();
+
+  //Rescue from state stuck, transition to recovery.
+  if((now-stateEnterTime) > 90UL * 60UL * 1000UL) {
+    //MOVE TO RECOVERY STATE.
+  }
+
   
   buzzUpdate();
+
+  //Append GPS data
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
   } 
